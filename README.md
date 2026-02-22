@@ -1,4 +1,4 @@
 به نوبت (be nobat)
 برای اجرای pocketbase
 
-pocketbase serve
+cmd command: pocketbase serve
