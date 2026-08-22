@@ -354,23 +354,16 @@ onRecordValidate((e) => {
             "close_time"
         );
 
-    if (
-        openTime.isZero() ||
-        closeTime.isZero()
-    ) {
-        throw new BadRequestError(
-            "open_time and close_time are required."
-        );
-    }
+   
 
-    if (
+    /* if (
         openTime.unix() >=
         closeTime.unix()
     ) {
         throw new BadRequestError(
             "open_time must be before close_time."
         );
-    }
+    } */
 
     // ----------------------------------
     // Current Assignment
