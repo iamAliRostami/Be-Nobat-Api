@@ -5,16 +5,18 @@
 //
 // POST /api/be-nobat/availability/base
 //
-// در این نسخه فقط موارد زیر بررسی می‌شوند:
+// [fix/production-readiness] این نسخه، برخلاف نسخه‌ی قبلی، این موارد را هم
+// در نظر می‌گیرد (که مهم‌ترین نقصِ کارکردی endpoint قبلی بود: بدون این‌ها
+// اسلات‌هایی که قبلاً واقعاً رزرو شده بودند هم به‌عنوان «آزاد» برگردانده
+// می‌شدند):
 //
-// - برنامه هفتگی Resource
-// - مدت سرویس‌های انتخاب‌شده
+// - resource_exceptions (تعطیلی/مرخصی/تعمیرات به‌عنوان بازه‌ی مسدود، و
+//   ساعات کاری فوق‌العاده به‌عنوان بازه‌ی اضافه)
+// - appointment_services موجود و فعال (غیر cancelled) روی همین resource
 //
-// هنوز این موارد محاسبه نمی‌شوند:
-//
-// - resource_exceptions
-// - appointmentهای موجود
-// - امتیازدهی و بهینه‌سازی Gapها
+// هنوز این مورد پیاده‌سازی نشده:
+// - امتیازدهی و بهینه‌سازی Gapها (اولویت‌بندی اسلات‌ها بر اساس فاصله‌ی
+//   بهینه بین نوبت‌ها). این صرفاً یک بهینه‌سازی UX است، نه یک باگ صحت داده.
 //
 // open_time و close_time از نوع Text و با فرمت HH:mm هستند.
 // ============================================================================
@@ -560,7 +562,7 @@ routerAdd(
         //
         // ====================================================================
 
-        const intervals =
+        const baseIntervalRows =
             e.app.findRecordsByFilter(
 
                 "resource_availability",
@@ -588,14 +590,225 @@ routerAdd(
                 }
             );
 
+        const baseIntervals = [];
+
+        for (let i = 0; i < baseIntervalRows.length; i++) {
+            const openMinute = timeToMinute(baseIntervalRows[i].getString("open_time"));
+            const closeMinute = timeToMinute(baseIntervalRows[i].getString("close_time"));
+
+            if (openMinute >= closeMinute) {
+                throw new BadRequestError(
+                    "یکی از بازه‌های زمانی منبع معتبر نیست."
+                );
+            }
+
+            baseIntervals.push({ open: openMinute, close: closeMinute });
+        }
+
 
         // ====================================================================
-        // Resource در این روز برنامه کاری ندارد.
+        // Interval Helpers
+        //
+        // اعداد به‌صورت «دقیقه از شروع روز» (0 تا 1440) نگه‌داری می‌شوند.
         // ====================================================================
 
-        if (
-            intervals.length === 0
-        ) {
+        function mergeIntervals(list) {
+            if (list.length === 0) return [];
+
+            const sorted = list.slice().sort((a, b) => a.open - b.open);
+            const merged = [{ open: sorted[0].open, close: sorted[0].close }];
+
+            for (let i = 1; i < sorted.length; i++) {
+                const last = merged[merged.length - 1];
+                if (sorted[i].open <= last.close) {
+                    last.close = Math.max(last.close, sorted[i].close);
+                } else {
+                    merged.push({ open: sorted[i].open, close: sorted[i].close });
+                }
+            }
+
+            return merged;
+        }
+
+        function subtractIntervals(base, cuts) {
+            let result = [];
+
+            for (let i = 0; i < base.length; i++) {
+                let segments = [{ open: base[i].open, close: base[i].close }];
+
+                for (let c = 0; c < cuts.length; c++) {
+                    const cut = cuts[c];
+                    const next = [];
+
+                    for (let s = 0; s < segments.length; s++) {
+                        const seg = segments[s];
+
+                        if (cut.close <= seg.open || cut.open >= seg.close) {
+                            // بدون هم‌پوشانی
+                            next.push(seg);
+                            continue;
+                        }
+
+                        if (cut.open > seg.open) {
+                            next.push({ open: seg.open, close: Math.min(cut.open, seg.close) });
+                        }
+
+                        if (cut.close < seg.close) {
+                            next.push({ open: Math.max(cut.close, seg.open), close: seg.close });
+                        }
+                    }
+
+                    segments = next;
+                }
+
+                for (let s = 0; s < segments.length; s++) {
+                    if (segments[s].close > segments[s].open) {
+                        result.push(segments[s]);
+                    }
+                }
+            }
+
+            return result;
+        }
+
+
+        // ====================================================================
+        // Resource Exceptions
+        //
+        // - effect = "unavailable" و status = "enable": بازه‌ی مسدود (تعطیلی،
+        //   مرخصی، تعمیرات و ...) که از برنامه‌ی هفتگی کم می‌شود.
+        // - effect = "available" و status = "enable": ساعت کاری فوق‌العاده که
+        //   حتی اگر روز عادتاً بسته باشد، اضافه می‌شود (مثلاً افتتاحیه یک
+        //   روز تعطیل).
+        // - resource_assignment_id خالی یعنی استثناء برای کل شعبه است.
+        // ====================================================================
+
+        const dayStartMs = date.getTime();
+        const dayEndMs = dayStartMs + 24 * 60 * 60000;
+
+        const exceptionRows = e.app.findRecordsByFilter(
+            "resource_exceptions",
+            `
+                (
+                    resource_assignment_id = {:assignment}
+                    ||
+                    (resource_assignment_id = "" && branch_id = {:branch})
+                )
+                &&
+                status = "enable"
+                &&
+                start_datetime <= {:dayEnd}
+                &&
+                end_datetime >= {:dayStart}
+            `,
+            "",
+            0,
+            0,
+            {
+                assignment: resourceAssignmentId,
+                branch: branchId,
+                dayStart: new Date(dayStartMs).toISOString(),
+                dayEnd: new Date(dayEndMs).toISOString()
+            }
+        );
+
+        const blockedIntervals = [];
+        const extraOpenIntervals = [];
+
+        for (let i = 0; i < exceptionRows.length; i++) {
+            const row = exceptionRows[i];
+
+            const rowStartMs = row.getDateTime("start_datetime").unix() * 1000;
+            const rowEndMs = row.getDateTime("end_datetime").unix() * 1000;
+
+            const clippedOpenMs = Math.max(rowStartMs, dayStartMs);
+            const clippedCloseMs = Math.min(rowEndMs, dayEndMs);
+
+            if (clippedCloseMs <= clippedOpenMs) {
+                continue; // در واقع همپوشانی‌ای با این روز ندارد
+            }
+
+            const openMinute = Math.round((clippedOpenMs - dayStartMs) / 60000);
+            const closeMinute = Math.round((clippedCloseMs - dayStartMs) / 60000);
+
+            if (row.getString("effect") === "available") {
+                extraOpenIntervals.push({ open: openMinute, close: closeMinute });
+            } else {
+                // پیش‌فرض امن: هر مقدار دیگری (یا "unavailable") مسدودکننده در نظر گرفته می‌شود.
+                blockedIntervals.push({ open: openMinute, close: closeMinute });
+            }
+        }
+
+
+        // ====================================================================
+        // Existing Bookings (جلوگیری از نمایش Slotهای قبلاً رزروشده)
+        //
+        // appointment_services فعال (غیر cancelled) متعلق به هر service_assignment
+        // مربوط به همین resource_assignment، که در بازه‌ی همین روز قرار می‌گیرند.
+        // ====================================================================
+
+        const bookedRows = e.app.findRecordsByFilter(
+            "appointment_services",
+            `
+                service_assignment_id.resource_assignment_id = {:assignment}
+                &&
+                status != "cancelled"
+                &&
+                start_at < {:dayEnd}
+                &&
+                start_at >= {:windowStart}
+            `,
+            "",
+            0,
+            0,
+            {
+                assignment: resourceAssignmentId,
+                // مدت هیچ appointment_service ای در عمل از 24 ساعت بیشتر نمی‌شود؛
+                // یک بازه‌ی امن قبل از شروع روز هم برای نوبت‌هایی که از دیروز
+                // «سرریز» شده باشند در نظر گرفته می‌شود.
+                windowStart: new Date(dayStartMs - 24 * 60 * 60000).toISOString(),
+                dayEnd: new Date(dayEndMs).toISOString()
+            }
+        );
+
+        const bookedIntervals = [];
+
+        for (let i = 0; i < bookedRows.length; i++) {
+            const row = bookedRows[i];
+
+            const startMs = row.getDateTime("start_at").unix() * 1000;
+            const durationMinutes = Number(row.get("duration")) || 0;
+            const endMs = startMs + durationMinutes * 60000;
+
+            if (endMs <= dayStartMs || startMs >= dayEndMs) {
+                continue; // با این روز هم‌پوشانی ندارد
+            }
+
+            bookedIntervals.push({
+                open: Math.max(0, Math.round((startMs - dayStartMs) / 60000)),
+                close: Math.min(24 * 60, Math.round((endMs - dayStartMs) / 60000))
+            });
+        }
+
+
+        // ====================================================================
+        // ترکیب نهایی:
+        // (برنامه‌ی هفتگی ∪ ساعات فوق‌العاده) − (استثناهای مسدودکننده ∪ رزروهای موجود)
+        // ====================================================================
+
+        const openIntervals = mergeIntervals(baseIntervals.concat(extraOpenIntervals));
+
+        const workingIntervals = subtractIntervals(
+            openIntervals,
+            blockedIntervals.concat(bookedIntervals)
+        );
+
+
+        // ====================================================================
+        // Resource در این روز هیچ بازه‌ی خالی‌ای ندارد.
+        // ====================================================================
+
+        if (workingIntervals.length === 0) {
 
             return e.json(
                 200,
@@ -643,41 +856,15 @@ routerAdd(
 
         for (
             let i = 0;
-            i < intervals.length;
+            i < workingIntervals.length;
             i++
         ) {
 
             const interval =
-                intervals[i];
+                workingIntervals[i];
 
-
-            const openMinute =
-                timeToMinute(
-                    interval
-                        .getString(
-                            "open_time"
-                        )
-                );
-
-
-            const closeMinute =
-                timeToMinute(
-                    interval
-                        .getString(
-                            "close_time"
-                        )
-                );
-
-
-            if (
-                openMinute >=
-                closeMinute
-            ) {
-                throw new BadRequestError(
-                    "یکی از بازه‌های زمانی منبع معتبر نیست."
-                );
-            }
-
+            const openMinute = interval.open;
+            const closeMinute = interval.close;
 
             for (
                 let start =
