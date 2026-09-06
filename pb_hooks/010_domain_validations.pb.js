@@ -768,52 +768,13 @@ onRecordCreateRequest((e) => {
         e.record.set("final_price", 0);
     }
 
-    // وضعیت و مبالغ تجمیعی داده‌های server-owned هستند. قانون API جلوی
-    // ارسال status دلخواه در create را نمی‌گیرد و بدون این overwrite یک
-    // مشتری می‌توانست نوبت را مستقیماً completed/no_show بسازد.
-    if (!e.hasSuperuserAuth()) {
-        e.record.set("total_price", 0);
-        e.record.set("discount_amount", 0);
-        e.record.set("final_price", 0);
-        e.record.set("status", "pending");
-    } else if (e.record.getString("status") === "") {
+    if (e.record.getString("status") === "") {
         e.record.set("status", "pending");
     }
 
     e.next();
 
 }, "appointment");
-
-
-// مقادیر اولیه‌ی وضعیت هر خط رزرو نیز server-owned است. علاوه بر جلوگیری
-// از create مستقیم با completed، افزودن خدمت به یک نوبت نهایی‌شده را می‌بندد.
-onRecordCreateRequest((e) => {
-
-    const appointment = e.app.findRecordById(
-        "appointment",
-        e.record.getString("appointment_id")
-    );
-
-    const appointmentStatus = appointment.getString("status");
-    if (
-        !e.hasSuperuserAuth() &&
-        appointmentStatus !== "pending" &&
-        appointmentStatus !== "confirmed"
-    ) {
-        throw new BadRequestError(
-            "افزودن خدمت به نوبت نهایی‌شده مجاز نیست."
-        );
-    }
-
-    if (!e.hasSuperuserAuth()) {
-        e.record.set("status", "pending");
-    } else if (e.record.getString("status") === "") {
-        e.record.set("status", "pending");
-    }
-
-    e.next();
-
-}, "appointment_services");
 
 
 // ============================================================================

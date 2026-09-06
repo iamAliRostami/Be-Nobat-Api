@@ -30,7 +30,6 @@ onRecordAfterUpdateSuccess((e) => {
     }
 
     let clientId = e.record.get("client_user_id");
-    let actorId = e.auth ? e.auth.id : "";
     let branchId = e.record.get("branch_id");
     let businessId = "";
     try {
@@ -41,26 +40,18 @@ onRecordAfterUpdateSuccess((e) => {
     }
 
     if (newStatus === "completed") {
-        createReputationEvent(e.app, clientId, e.record.id, actorId, businessId, "appointment_completed", 5);
+        createReputationEvent(e.app, clientId, e.record.id, "", businessId, "appointment_completed", 5);
     } else if (newStatus === "no_show") {
-        createReputationEvent(e.app, clientId, e.record.id, actorId, businessId, "no_show", -10);
+        createReputationEvent(e.app, clientId, e.record.id, "", businessId, "no_show", -10);
     } else if (newStatus === "cancelled") {
-        // لغو توسط کسب‌وکار/پرسنل نباید اعتبار مشتری را کاهش دهد. فقط وقتی
-        // خود مشتری عامل درخواست است قانون جریمه‌ی زمانی اعمال می‌شود.
-        if (actorId !== clientId) {
-            createReputationEvent(e.app, clientId, e.record.id, actorId, businessId, "appointment_cancelled", 0);
-            e.next();
-            return;
-        }
-
         // اگر کمتر از ۲۴ ساعت به شروع نوبت کنسل شده، جریمه‌ی بیشتری در نظر گرفته می‌شه
         let start = new Date(e.record.get("start"));
         let now = new Date();
         let hoursLeft = (start.getTime() - now.getTime()) / (1000 * 60 * 60);
         if (hoursLeft < 24) {
-            createReputationEvent(e.app, clientId, e.record.id, actorId, businessId, "late_cancellation", -5);
+            createReputationEvent(e.app, clientId, e.record.id, "", businessId, "late_cancellation", -5);
         } else {
-            createReputationEvent(e.app, clientId, e.record.id, actorId, businessId, "cancelled_on_time", 0);
+            createReputationEvent(e.app, clientId, e.record.id, "", businessId, "cancelled_on_time", 0);
         }
     }
 
