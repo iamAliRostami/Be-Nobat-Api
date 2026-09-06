@@ -1,138 +1,90 @@
 /// <reference path="../pb_data/types.d.ts" />
+
+// [fix/production-readiness]
+// این هلپر یک فیلد text را با یک فیلد number با همان id/name/required جایگزین
+// می‌کند. id واقعیِ فیلد و موقعیتش در لیست، در لحظه‌ی اجرا از روی نام فیلد
+// خوانده می‌شود (نه هاردکد)، تا این migration مستقل از اینکه id فعلی در
+// دیتابیس شما دقیقاً چی هست کار کند.
+function convertTextToNumber(collection, fieldName, opts) {
+  const existing = collection.fields.getByName(fieldName)
+  const existingId = existing.id
+  const wasRequired = existing.required
+
+  let index = -1
+  for (let i = 0; i < collection.fields.length; i++) {
+    if (collection.fields[i].name === fieldName) {
+      index = i
+      break
+    }
+  }
+
+  collection.fields.removeByName(fieldName)
+
+  collection.fields.addAt(index >= 0 ? index : collection.fields.length, new Field({
+    "help": "",
+    "hidden": false,
+    "id": existingId,
+    "max": null,
+    "min": (opts && typeof opts.min === "number") ? opts.min : 0,
+    "name": fieldName,
+    "onlyInt": false,
+    "presentable": false,
+    "required": wasRequired,
+    "system": false,
+    "type": "number"
+  }))
+}
+
+function convertNumberToText(collection, fieldName, opts) {
+  const existing = collection.fields.getByName(fieldName)
+  const existingId = existing.id
+  const wasRequired = existing.required
+
+  let index = -1
+  for (let i = 0; i < collection.fields.length; i++) {
+    if (collection.fields[i].name === fieldName) {
+      index = i
+      break
+    }
+  }
+
+  collection.fields.removeByName(fieldName)
+
+  collection.fields.addAt(index >= 0 ? index : collection.fields.length, new Field({
+    "autogeneratePattern": "",
+    "help": "",
+    "hidden": false,
+    "id": existingId,
+    "max": 0,
+    "min": (opts && typeof opts.min === "number") ? opts.min : 0,
+    "name": fieldName,
+    "pattern": "^(0|[1-9]\\d*)$",
+    "presentable": false,
+    "primaryKey": false,
+    "required": wasRequired,
+    "system": false,
+    "type": "text"
+  }))
+}
+
 migrate((app) => {
   const appointment = app.findCollectionByNameOrId("pbc_1970990732")
-
-  appointment.fields.addAt(6, new Field({
-    "help": "",
-    "hidden": false,
-    "id": "number163230955",
-    "max": null,
-    "min": 0,
-    "name": "total_price",
-    "onlyInt": false,
-    "presentable": false,
-    "required": false,
-    "system": false,
-    "type": "number"
-  }))
-
-  appointment.fields.addAt(7, new Field({
-    "help": "",
-    "hidden": false,
-    "id": "number3772865661",
-    "max": null,
-    "min": 0,
-    "name": "discount_amount",
-    "onlyInt": false,
-    "presentable": false,
-    "required": false,
-    "system": false,
-    "type": "number"
-  }))
-
-  appointment.fields.addAt(8, new Field({
-    "help": "",
-    "hidden": false,
-    "id": "number3419435337",
-    "max": null,
-    "min": 0,
-    "name": "final_price",
-    "onlyInt": false,
-    "presentable": false,
-    "required": false,
-    "system": false,
-    "type": "number"
-  }))
-
+  convertTextToNumber(appointment, "total_price")
+  convertTextToNumber(appointment, "discount_amount")
+  convertTextToNumber(appointment, "final_price")
   app.save(appointment)
 
   const appointmentServices = app.findCollectionByNameOrId("pbc_1262204345")
-
-  appointmentServices.fields.addAt(3, new Field({
-    "help": "",
-    "hidden": false,
-    "id": "number3402113753",
-    "max": null,
-    "min": 0,
-    "name": "price",
-    "onlyInt": false,
-    "presentable": false,
-    "required": true,
-    "system": false,
-    "type": "number"
-  }))
-
+  convertTextToNumber(appointmentServices, "price")
   return app.save(appointmentServices)
 }, (app) => {
   const appointment = app.findCollectionByNameOrId("pbc_1970990732")
-
-  appointment.fields.addAt(6, new Field({
-    "autogeneratePattern": "",
-    "help": "",
-    "hidden": false,
-    "id": "text163230955",
-    "max": 0,
-    "min": 0,
-    "name": "total_price",
-    "pattern": "^(0|[1-9]\\d*)$",
-    "presentable": false,
-    "primaryKey": false,
-    "required": false,
-    "system": false,
-    "type": "text"
-  }))
-
-  appointment.fields.addAt(7, new Field({
-    "autogeneratePattern": "",
-    "help": "",
-    "hidden": false,
-    "id": "text3772865661",
-    "max": 0,
-    "min": 0,
-    "name": "discount_amount",
-    "pattern": "^(0|[1-9]\\d*)$",
-    "presentable": false,
-    "primaryKey": false,
-    "required": false,
-    "system": false,
-    "type": "text"
-  }))
-
-  appointment.fields.addAt(8, new Field({
-    "autogeneratePattern": "",
-    "help": "",
-    "hidden": false,
-    "id": "text3419435337",
-    "max": 0,
-    "min": 0,
-    "name": "final_price",
-    "pattern": "^(0|[1-9]\\d*)$",
-    "presentable": false,
-    "primaryKey": false,
-    "required": false,
-    "system": false,
-    "type": "text"
-  }))
-
+  convertNumberToText(appointment, "total_price", { min: 0 })
+  convertNumberToText(appointment, "discount_amount", { min: 0 })
+  convertNumberToText(appointment, "final_price", { min: 0 })
   app.save(appointment)
 
   const appointmentServices = app.findCollectionByNameOrId("pbc_1262204345")
-
-  appointmentServices.fields.addAt(3, new Field({
-    "autogeneratePattern": "",
-    "help": "",
-    "hidden": false,
-    "id": "text3402113753",
-    "max": 0,
-    "min": 1,
-    "name": "price",
-    "pattern": "^(0|[1-9]\\d*)$",
-    "presentable": false,
-    "primaryKey": false,
-    "required": true,
-    "system": false,
-    "type": "text"
-  }))
-
+  convertNumberToText(appointmentServices, "price", { min: 1 })
   return app.save(appointmentServices)
 })

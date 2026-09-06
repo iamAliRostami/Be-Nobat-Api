@@ -12,168 +12,51 @@ migrate((app) => {
   // اما چون در لحظه‌ی ساخت اولیه‌ی appointment (پیش از افزودن هیچ سرویسی)
   // start/end هنوز معنایی ندارند، required=true روی این فیلدها اصلاً اجازه‌ی
   // ساخت appointment جدید را نمی‌داد.
+  //
+  // توجه: عمداً از collection.fields.getByName(...) + تغییر پراپرتی به‌جای
+  // بازسازی Field با id دستی استفاده شده، چون id هاردکدشده ممکنه با id
+  // واقعی فیلد در دیتابیس شما یکی نباشه (همون چیزی که باعث خطای
+  // «Duplicated or invalid field name» می‌شد).
 
-  // update field
-  collection.fields.addAt(3, new Field({
-    "help": "",
-    "hidden": false,
-    "id": "date2675529103",
-    "max": "",
-    "min": "",
-    "name": "start",
-    "presentable": false,
-    "required": false,
-    "system": false,
-    "type": "date"
-  }))
+  const start = collection.fields.getByName("start")
+  start.required = false
 
-  // update field
-  collection.fields.addAt(4, new Field({
-    "help": "",
-    "hidden": false,
-    "id": "date16528305",
-    "max": "",
-    "min": "",
-    "name": "end",
-    "presentable": false,
-    "required": false,
-    "system": false,
-    "type": "date"
-  }))
+  const end = collection.fields.getByName("end")
+  end.required = false
 
-  // update field
-  collection.fields.addAt(6, new Field({
-    "autogeneratePattern": "",
-    "help": "",
-    "hidden": false,
-    "id": "text163230955",
-    "max": 0,
-    "min": 0,
-    "name": "total_price",
-    "pattern": "^(0|[1-9]\\d*)$",
-    "presentable": false,
-    "primaryKey": false,
-    "required": false,
-    "system": false,
-    "type": "text"
-  }))
+  const totalPrice = collection.fields.getByName("total_price")
+  totalPrice.required = false
+  totalPrice.min = 0
 
-  // update field
-  collection.fields.addAt(7, new Field({
-    "autogeneratePattern": "",
-    "help": "",
-    "hidden": false,
-    "id": "text3772865661",
-    "max": 0,
-    "min": 0,
-    "name": "discount_amount",
-    "pattern": "^(0|[1-9]\\d*)$",
-    "presentable": false,
-    "primaryKey": false,
-    "required": false,
-    "system": false,
-    "type": "text"
-  }))
+  const discountAmount = collection.fields.getByName("discount_amount")
+  discountAmount.required = false
+  discountAmount.min = 0
 
-  // update field
-  collection.fields.addAt(8, new Field({
-    "autogeneratePattern": "",
-    "help": "",
-    "hidden": false,
-    "id": "text3419435337",
-    "max": 0,
-    "min": 0,
-    "name": "final_price",
-    "pattern": "^(0|[1-9]\\d*)$",
-    "presentable": false,
-    "primaryKey": false,
-    "required": false,
-    "system": false,
-    "type": "text"
-  }))
+  const finalPrice = collection.fields.getByName("final_price")
+  finalPrice.required = false
+  finalPrice.min = 0
 
   return app.save(collection)
 }, (app) => {
   const collection = app.findCollectionByNameOrId("pbc_1970990732")
 
-  // update field
-  collection.fields.addAt(3, new Field({
-    "help": "",
-    "hidden": false,
-    "id": "date2675529103",
-    "max": "",
-    "min": "",
-    "name": "start",
-    "presentable": false,
-    "required": true,
-    "system": false,
-    "type": "date"
-  }))
+  const start = collection.fields.getByName("start")
+  start.required = true
 
-  // update field
-  collection.fields.addAt(4, new Field({
-    "help": "",
-    "hidden": false,
-    "id": "date16528305",
-    "max": "",
-    "min": "",
-    "name": "end",
-    "presentable": false,
-    "required": true,
-    "system": false,
-    "type": "date"
-  }))
+  const end = collection.fields.getByName("end")
+  end.required = true
 
-  // update field
-  collection.fields.addAt(6, new Field({
-    "autogeneratePattern": "",
-    "help": "",
-    "hidden": false,
-    "id": "text163230955",
-    "max": 0,
-    "min": 1,
-    "name": "total_price",
-    "pattern": "^(0|[1-9]\\d*)$",
-    "presentable": false,
-    "primaryKey": false,
-    "required": true,
-    "system": false,
-    "type": "text"
-  }))
+  const totalPrice = collection.fields.getByName("total_price")
+  totalPrice.required = true
+  totalPrice.min = 1
 
-  // update field
-  collection.fields.addAt(7, new Field({
-    "autogeneratePattern": "",
-    "help": "",
-    "hidden": false,
-    "id": "text3772865661",
-    "max": 0,
-    "min": 1,
-    "name": "discount_amount",
-    "pattern": "^(0|[1-9]\\d*)$",
-    "presentable": false,
-    "primaryKey": false,
-    "required": true,
-    "system": false,
-    "type": "text"
-  }))
+  const discountAmount = collection.fields.getByName("discount_amount")
+  discountAmount.required = true
+  discountAmount.min = 1
 
-  // update field
-  collection.fields.addAt(8, new Field({
-    "autogeneratePattern": "",
-    "help": "",
-    "hidden": false,
-    "id": "text3419435337",
-    "max": 0,
-    "min": 1,
-    "name": "final_price",
-    "pattern": "^(0|[1-9]\\d*)$",
-    "presentable": false,
-    "primaryKey": false,
-    "required": true,
-    "system": false,
-    "type": "text"
-  }))
+  const finalPrice = collection.fields.getByName("final_price")
+  finalPrice.required = true
+  finalPrice.min = 1
 
   return app.save(collection)
 })
