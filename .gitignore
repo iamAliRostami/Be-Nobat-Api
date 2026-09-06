@@ -71,6 +71,12 @@ $RECYCLE.BIN/
 *.sqlite
 *.sqlite3
 
+# PocketBase runtime state contains user records, tokens, uploaded files and
+# SQLite WAL files. Production and development must mount/backup pb_data as a
+# private volume; only generated hook typings are safe to version.
+pb_data/*
+!pb_data/types.d.ts
+
 
 ############################
 # Misc.
@@ -129,3 +135,7 @@ dist
 build
 .strapi-updater.json
 .strapi-cloud.json
+
+# Python
+__pycache__/
+*.py[cod]

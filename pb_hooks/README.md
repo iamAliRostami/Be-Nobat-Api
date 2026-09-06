@@ -17,6 +17,25 @@
 | `41_appointment_services_status.pb.js` | همون state machine برای appointment_services.status |
 | `50_reputation_events.pb.js` | بعد از completed/no_show/cancelled شدن نوبت، رکورد reputation_events خودکار می‌سازه |
 
+## کنترل‌های Production Safety
+
+- وضعیت و مبلغ‌های اولیه‌ی `appointment` و وضعیت اولیه‌ی
+  `appointment_services` برای درخواست عادی همیشه در سرور مقداردهی می‌شوند؛
+  بنابراین کلاینت نمی‌تواند رکورد را مستقیماً `completed` بسازد یا مبلغ
+  تجمیعی جعلی تزریق کند.
+- افزودن خدمت به نوبت‌های نهایی‌شده (`completed`، `cancelled` و `no_show`)
+  رد می‌شود.
+- مشتری اجازه دارد فقط نوبت متعلق به خودش را به `cancelled` ببرد؛ گذارهای
+  مجاز همچنان توسط state machine کنترل می‌شوند.
+- لغو توسط ارائه‌دهنده جریمه‌ی اعتباری مشتری ایجاد نمی‌کند. شناسه‌ی عامل
+  تغییر نیز در reputation event ذخیره می‌شود.
+- migration شماره‌ی `1786900050` یکتایی review هر خدمت، عضویت شعبه، اتصال
+  role/permission و شیفت دقیقاً تکراری را در سطح دیتابیس تضمین می‌کند و برای
+  queryهای استثناهای تقویم index اضافه می‌کند.
+- دستور `python3 scripts/audit_pocketbase.py` دیتابیس schema کامیت‌شده را
+  بدون تغییر فایل بررسی می‌کند و public بودن ناخواسته‌ی mutation ruleها،
+  ناسازگاری نوع مبلغ‌ها و خرابی SQLite را fail می‌کند.
+
 ## تغییرات برنچ `fix/production-readiness`
 
 این پروژه قبلاً یک فایل دیگه هم داشت: `validator.pb.js`. اون فایل روی همون کالکشن‌هایی که `010_domain_validations.pb.js` پوشش می‌داد (service_category، services، branch_services، resource_assignments، service_assignments، resource_availability، resource_exceptions، role_permissions، user_system_roles، branch_membership، favorites) **دوباره** `onRecordValidate` ثبت می‌کرد، و علاوه بر این، برای `appointment`/`appointment_services` هم قانون‌هایی داشت که با معماری فعلی (محاسبه‌ی bottom-up از روی appointment_services) در تضاد بودن. مشکلات مشخص‌شده:
